@@ -1410,7 +1410,7 @@ const AdminOIDC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-zinc-400 mb-2">唯一标识符 (name) <span className="text-red-500">*</span></label>
-                    <input type="text" required disabled={!!formData.id} value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/30 disabled:opacity-50" placeholder="例如 linuxdo" />
+                    <input type="text" required readOnly={!!formData.id} value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className={`w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/30 ${formData.id ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="例如 linuxdo" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-zinc-400 mb-2">显示名称 (display_name) <span className="text-red-500">*</span></label>
