@@ -1257,28 +1257,28 @@ const AdminUsers = ({ currentUser }) => {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/5">
-                  <div className="flex items-center gap-4 text-[11px] text-zinc-500">
-                    <span>作品 <strong className="text-zinc-300">{u.upload_count || 0}</strong></span>
-                    <span>{new Date(u.created_at).toLocaleDateString()}</span>
+                <div className="flex flex-col gap-3 mt-4 pt-3 border-t border-white/5">
+                  <div className="flex items-center justify-between text-[11px] text-zinc-500">
+                    <span className="flex items-center gap-2">作品数量 <strong className="text-zinc-300">{u.upload_count || 0}</strong></span>
+                    <span>注册于 {new Date(u.created_at).toLocaleDateString()}</span>
                   </div>
                   {!isSelf && (
-                    <div className="flex items-center gap-1">
-                      <DropdownSelect
-                        options={[
-                          { value: 'user', label: '用户' },
-                          { value: 'trusted', label: '信任' },
-                          { value: 'admin', label: '管理员' }
-                        ]}
-                        value={u.role}
-                        onChange={(val) => updateRole(u.id, val)}
-                      />
+                    <div className="flex items-center justify-end gap-2 pr-1">
+                      <select 
+                        value={u.role} 
+                        onChange={(e) => updateRole(u.id, e.target.value)}
+                        className="bg-zinc-900 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-zinc-300 focus:outline-none focus:border-white/30 cursor-pointer"
+                      >
+                        <option value="user">普通用户</option>
+                        <option value="trusted">信任用户</option>
+                        <option value="admin">管理员</option>
+                      </select>
                       {u.is_banned ? (
-                        <Button variant="ghost" onClick={() => toggleBan(u.id, false)} className="text-emerald-400 text-[11px] px-2 py-1 h-auto">解封</Button>
+                        <Button variant="ghost" onClick={() => toggleBan(u.id, false)} className="text-emerald-400 text-[11px] px-2 py-1 h-auto border border-emerald-500/20 bg-emerald-500/10 rounded-lg shrink-0">解封</Button>
                       ) : (
-                        <Button variant="ghost" onClick={() => toggleBan(u.id, true)} className="text-orange-400 text-[11px] px-2 py-1 h-auto">封禁</Button>
+                        <Button variant="ghost" onClick={() => toggleBan(u.id, true)} className="text-orange-400 text-[11px] px-2 py-1 h-auto border border-orange-500/20 bg-orange-500/10 rounded-lg shrink-0">封禁</Button>
                       )}
-                      <Button variant="ghost" onClick={() => deleteUser(u.id)} className="text-red-500 hover:bg-red-500/10 text-[11px] px-2 py-1 h-auto"><Trash2 className="w-3 h-3"/></Button>
+                      <Button variant="ghost" onClick={() => deleteUser(u.id)} className="text-red-500 hover:bg-red-500/20 text-[11px] px-2 py-1 h-auto border border-red-500/20 bg-red-500/5 rounded-lg shrink-0"><Trash2 className="w-3 h-3"/></Button>
                     </div>
                   )}
                 </div>
