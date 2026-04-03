@@ -451,21 +451,21 @@ const ImageCard = ({ image, onClick }) => {
   const [imgError, setImgError] = useState(false);
   if (imgError) return null;
   return (
-  <div className="group relative cursor-pointer overflow-hidden rounded-3xl bg-zinc-900 border border-white/5 shadow-xl shadow-black/50 aspect-[3/4]" onClick={() => onClick(image.id)}>
-    <img src={image.thumbnail_url || image.image_url} alt={image.title} loading="lazy" onError={() => setImgError(true)} className="absolute inset-0 w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-1000 ease-out" />
+  <div className="group relative cursor-pointer overflow-hidden rounded-2xl bg-zinc-900 border border-white/5 shadow-xl shadow-black/50 break-inside-avoid mb-5" onClick={() => onClick(image.id)}>
+    <img src={image.thumbnail_url || image.image_url} alt={image.title} loading="lazy" onError={() => setImgError(true)} className="w-full block transform group-hover:scale-105 transition-transform duration-700 ease-out" />
     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-black/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-      <div className="absolute top-4 left-4 flex gap-2">
+      <div className="absolute top-3 left-3 flex gap-1.5">
         {parsedTags.slice(0, 2).map((tag, i) => (
-          <span key={i} className="px-3 py-1.5 text-xs font-medium text-white bg-black/40 backdrop-blur-md rounded-full border border-white/10">{tag}</span>
+          <span key={i} className="px-2.5 py-1 text-[10px] font-medium text-white bg-black/40 backdrop-blur-md rounded-full border border-white/10">{tag}</span>
         ))}
       </div>
-      <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <img src={image.user?.avatar_url || `https://ui-avatars.com/api/?name=${image.user?.username}&background=random`} className="w-8 h-8 rounded-full border border-white/20" />
-          <span className="text-sm font-medium text-white shadow-black drop-shadow-lg">{image.user?.username || '未知'}</span>
+      <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <img src={image.user?.avatar_url || `https://ui-avatars.com/api/?name=${image.user?.username}&background=random`} className="w-7 h-7 rounded-full border border-white/20" />
+          <span className="text-xs font-medium text-white drop-shadow-lg">{image.user?.username || '未知'}</span>
         </div>
-        <div className="flex items-center gap-3 text-zinc-300">
-          <span className="flex items-center gap-1.5 text-xs font-medium"><Heart className="w-4 h-4 text-white hover:text-red-500 transition-colors"/> {image.likes || 0}</span>
+        <div className="flex items-center gap-2 text-zinc-300">
+          <span className="flex items-center gap-1 text-[10px] font-medium"><Heart className="w-3.5 h-3.5 text-white"/> {image.likes || 0}</span>
         </div>
       </div>
     </div>
@@ -549,7 +549,7 @@ const HomeView = ({ navigate, searchQuery }) => {
         {images.length === 0 ? (
            <div className="py-20 text-center text-zinc-500 w-full animate-in fade-in">暂无作品，去上传第一张吧</div>
         ) : (
-          <div className="w-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="w-full columns-2 sm:columns-3 md:columns-4 xl:columns-5 gap-5">
             {images.map((img) => <ImageCard key={img.id} image={img} onClick={(id) => navigate(`/image/${id}`)} />)}
           </div>
         )}
