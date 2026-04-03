@@ -424,8 +424,8 @@ const ImageCard = ({ image, onClick }) => {
   const [imgError, setImgError] = useState(false);
   if (imgError) return null;
   return (
-  <div className="group relative mb-6 break-inside-avoid cursor-pointer overflow-hidden rounded-3xl bg-zinc-900 border border-white/5 shadow-xl shadow-black/50" onClick={() => onClick(image.id)}>
-    <img src={image.thumbnail_url || image.image_url} alt={image.title} loading="lazy" onError={() => setImgError(true)} className="w-full h-auto min-h-[120px] max-h-[600px] object-cover transform group-hover:scale-110 transition-transform duration-1000 ease-out" />
+  <div className="group relative mb-6 break-inside-avoid cursor-pointer overflow-hidden rounded-3xl bg-zinc-900 border border-white/5 shadow-xl shadow-black/50 max-h-[500px]" onClick={() => onClick(image.id)}>
+    <img src={image.thumbnail_url || image.image_url} alt={image.title} loading="lazy" onError={() => setImgError(true)} className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-1000 ease-out" />
     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-black/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
       <div className="absolute top-4 left-4 flex gap-2">
         {parsedTags.slice(0, 2).map((tag, i) => (
