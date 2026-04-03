@@ -22,7 +22,7 @@ export async function getOidcProvider(providerName) {
   // 已知的非标准 OAuth2 提供商，直接手动配置，不走 OIDC discovery
   const knownProviders = {
     'https://discord.com': {
-      authorization_endpoint: 'https://discord.com/oauth2/authorize',
+      authorization_endpoint: 'https://discord.com/api/oauth2/authorize',
       token_endpoint: 'https://discord.com/api/oauth2/token',
       userinfo_endpoint: 'https://discord.com/api/users/@me',
     },
