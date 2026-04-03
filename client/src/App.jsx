@@ -12,6 +12,25 @@ import {
 ==================================================================== */
 const DEBUG_MODE = false;
 
+// --- Toast 通知 ---
+let _toastHandler = null;
+const toast = (msg, duration = 2500) => _toastHandler?.(msg, duration);
+const ToastContainer = () => {
+  const [items, setItems] = useState([]);
+  _toastHandler = (msg, duration) => {
+    const id = Date.now();
+    setItems(prev => [...prev, { id, msg }]);
+    setTimeout(() => setItems(prev => prev.filter(i => i.id !== id)), duration);
+  };
+  return (
+    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center gap-2 pointer-events-none">
+      {items.map(i => (
+        <div key={i.id} className="px-5 py-2.5 bg-zinc-900/90 backdrop-blur-xl border border-white/10 text-white text-sm rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 duration-300 pointer-events-auto">{i.msg}</div>
+      ))}
+    </div>
+  );
+};
+
 const MOCK_CATEGORIES = [
   { id: 1, slug: 'character', name: '人物肖像', desc: '精致的人物摄影与插画' },
   { id: 2, slug: 'scene', name: '自然风景', desc: '令人叹为观止的风光' },
@@ -858,10 +877,11 @@ const UploadView = ({ navigate, user, editId }) => {
         if (negativeText) fd.append('negative_prompt_text', negativeText);
         fd.append('is_nsfw', isNsfw ? '1' : '0');
         const result = await api.post('/api/images', fd, true);
+        toast(result.status === 'approved' ? '发布成功 ✓' : '已提交，等待审核');
         navigate(result.status === 'approved' ? `/image/${result.id}` : '/');
       }
     } catch(e) {
-      alert((isEditMode ? '保存' : '发布') + '失败: ' + e.message);
+      toast((isEditMode ? '保存' : '发布') + '失败: ' + e.message);
     } finally {
       setIsUploading(false);
     }
@@ -1481,6 +1501,7 @@ export default function App() {
     <div className="min-h-screen bg-black text-white font-sans selection:bg-white/20 selection:text-white">
       {!currentPath.startsWith('/admin') && currentPath !== '/login' && <Navbar navigate={navigate} currentPath={currentPath} user={user} />}
       <main>{renderView()}</main>
+      <ToastContainer />
     </div>
   );
 }
