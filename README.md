@@ -30,9 +30,9 @@ npm run dev
 
 ```bash
 # 克隆项目
-git clone <repo-url> && cd aitag
+git clone https://github.com/bwwq/ShareTag.git && cd ShareTag
 
-# 一键部署（自动安装 Docker、配置 SSL）
+# 一键极简 Docker 部署（挂载于 9478 端口）
 chmod +x deploy.sh && ./deploy.sh
 ```
 
