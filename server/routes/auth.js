@@ -151,7 +151,7 @@ router.post('/local/register', async (req, res) => {
     const userCount = dbGet('SELECT COUNT(*) as c FROM users').c;
     const role = userCount === 0 ? 'admin' : 'user';
 
-    const existing = dbGet('SELECT * FROM users WHERE username = ? AND oidc_provider = "local"', username);
+    const existing = dbGet("SELECT * FROM users WHERE username = ? AND oidc_provider = 'local'", username);
     if (existing) return res.status(400).json({ error: '用户名已被注册' });
 
     const hash = await bcrypt.hash(password, 10);
@@ -203,7 +203,7 @@ router.put('/local/password', requireAuth, async (req, res) => {
 router.post('/local/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    const user = dbGet('SELECT * FROM users WHERE username = ? AND oidc_provider = "local"', username);
+    const user = dbGet("SELECT * FROM users WHERE username = ? AND oidc_provider = 'local'", username);
     if (!user || user.is_banned) {
       return res.status(401).json({ error: '用户名或密码错误' });
     }
