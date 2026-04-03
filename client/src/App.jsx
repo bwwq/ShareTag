@@ -1303,6 +1303,7 @@ const AdminOIDC = () => {
       setFormData({ 
         name: '', display_name: '', issuer_url: '', 
         client_id: '', client_secret: '', redirect_uri: '', 
+        scopes: 'openid profile email',
         enabled: true 
       });
     }
@@ -1431,6 +1432,11 @@ const AdminOIDC = () => {
                     <label className="block text-sm font-medium text-zinc-400 mb-2">回调地址 (redirect_uri) <span className="text-red-500">*</span></label>
                     <input type="url" required value={formData.redirect_uri} onChange={e=>setFormData({...formData, redirect_uri: e.target.value})} className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-white/30" placeholder="例如 http://localhost:3000/api/auth/callback/linuxdo" />
                     <p className="text-[10px] text-zinc-500 mt-1.5">提示：此地址需和你在提供商后台填写的安全回调地址一致</p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-zinc-400 mb-2">授权范围 (scopes)</label>
+                    <input type="text" value={formData.scopes || ''} onChange={e=>setFormData({...formData, scopes: e.target.value})} className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-white/30" placeholder="openid profile email" />
+                    <p className="text-[10px] text-zinc-500 mt-1.5">标准 OIDC 填 openid profile email，Discord 填 identify email，GitHub 填 read:user user:email</p>
                   </div>
                 </div>
               </form>
