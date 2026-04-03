@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  aitag:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: aitag-server
+    ports:
+      - "9478:3000"
+    volumes:
+      - ../data:/app/data
+      - ../uploads:/app/uploads
+    env_file: ../.env
+    restart: unless-stopped
