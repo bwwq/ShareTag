@@ -138,7 +138,7 @@ export async function exchangeCodeForUser(oidcConfig, provider, clientSecret, co
     username: getVal(userinfo, fieldMapping.username) || getVal(userinfo, 'username') || getVal(userinfo, 'name') || getVal(userinfo, 'login') || 'User',
     email: getVal(userinfo, fieldMapping.email) || null,
     avatar_url: avatarUrl,
-    trust_level: fieldMapping.trust_level ? (parseInt(getVal(userinfo, fieldMapping.trust_level)) || 0) : 0,
+    trust_level: parseInt(fieldMapping.trust_level ? getVal(userinfo, fieldMapping.trust_level) : getVal(userinfo, 'trust_level')) || 0,
     raw: userinfo,
   };
 }
