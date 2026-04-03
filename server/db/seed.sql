@@ -14,6 +14,6 @@ INSERT OR IGNORE INTO site_config (key, value) VALUES
   ('images_per_page', '24');
 
 INSERT OR IGNORE INTO categories (id, name, slug, sort_order) VALUES
-  (1, '三次元', 'real', 1),
-  (2, 'NovelAI', 'nai', 2),
-  (3, 'Stable Diffusion', 'sd', 3);
+  (1, '三次元', 'real', 99),
+  (2, 'NovelAI', 'nai', 1),
+  (3, 'Stable Diffusion', 'sd', 2);

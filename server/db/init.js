@@ -48,6 +48,18 @@ export async function initDb() {
   try { db.exec('ALTER TABLE images ADD COLUMN is_nsfw INTEGER NOT NULL DEFAULT 1'); console.log('[DB] Migrated: added is_nsfw to images'); } catch (e) {}
   try { db.exec("ALTER TABLE images ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public'"); console.log('[DB] Migrated: added visibility to images'); } catch (e) {}
 
+  // 迁移分类排序：NovelAI 首位，三次元末位
+  try {
+    const real = db.prepare("SELECT sort_order FROM categories WHERE slug = 'real'").get();
+    const nai = db.prepare("SELECT sort_order FROM categories WHERE slug = 'nai'").get();
+    if (real && nai && real.sort_order < nai.sort_order) {
+      db.exec("UPDATE categories SET sort_order = 1 WHERE slug = 'nai'");
+      db.exec("UPDATE categories SET sort_order = 2 WHERE slug = 'sd'");
+      db.exec("UPDATE categories SET sort_order = 99 WHERE slug = 'real'");
+      console.log('[DB] Migrated: reordered categories (nai first, real last)');
+    }
+  } catch (e) {}
+
   console.log('[DB] SQLite initialized at', dbPath);
   return db;
 }
