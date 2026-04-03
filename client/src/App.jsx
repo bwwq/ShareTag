@@ -183,6 +183,33 @@ const DropdownSelect = ({ options, value, onChange, placeholder = "请选择", c
   );
 };
 
+const CompactSelect = ({ options, value, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const handleClickOutside = (e) => { if (ref.current && !ref.current.contains(e.target)) setIsOpen(false); };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+  const selected = options.find(o => o.value === value);
+  return (
+    <div ref={ref} className="relative">
+      <button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/10 hover:border-white/20 bg-zinc-900 hover:bg-zinc-800 text-[11px] text-zinc-300 transition-colors">
+        {selected?.label} <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180 text-white' : 'text-zinc-500'}`} />
+      </button>
+      {isOpen && (
+        <div className="absolute right-0 bottom-full mb-1 w-28 bg-zinc-800/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] py-1 z-50 animate-in fade-in zoom-in-95 origin-bottom-right">
+          {options.map(opt => (
+            <button key={opt.value} onClick={() => { onChange(opt.value); setIsOpen(false); }} className={`w-full text-left px-3 py-2 text-[11px] transition-colors flex items-center justify-between ${value === opt.value ? 'text-white bg-white/10' : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'}`}>
+              {opt.label} {value === opt.value && <Check className="w-3 h-3 text-white" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const TagInput = ({ tags, onChange }) => {
   const [inputValue, setInputValue] = useState('');
   const [suggestions, setSuggestions] = useState([]);
@@ -1264,15 +1291,15 @@ const AdminUsers = ({ currentUser }) => {
                   </div>
                   {!isSelf && (
                     <div className="flex items-center justify-end gap-2 pr-1">
-                      <select 
+                      <CompactSelect 
                         value={u.role} 
-                        onChange={(e) => updateRole(u.id, e.target.value)}
-                        className="bg-zinc-900 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-zinc-300 focus:outline-none focus:border-white/30 cursor-pointer"
-                      >
-                        <option value="user">普通用户</option>
-                        <option value="trusted">信任用户</option>
-                        <option value="admin">管理员</option>
-                      </select>
+                        onChange={(val) => updateRole(u.id, val)}
+                        options={[
+                          { value: 'user', label: '普通用户' },
+                          { value: 'trusted', label: '信任用户' },
+                          { value: 'admin', label: '管理员' }
+                        ]}
+                      />
                       {u.is_banned ? (
                         <Button variant="ghost" onClick={() => toggleBan(u.id, false)} className="text-emerald-400 text-[11px] px-2 py-1 h-auto border border-emerald-500/20 bg-emerald-500/10 rounded-lg shrink-0">解封</Button>
                       ) : (
