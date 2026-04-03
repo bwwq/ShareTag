@@ -17,7 +17,7 @@ export async function getOidcProvider(providerName) {
   }
 
   let fieldMapping;
-  try { fieldMapping = JSON.parse(provider.field_mapping || '{}'); } catch { fieldMapping = {}; }
+  try { fieldMapping = JSON.parse(provider.field_mapping || '{}') || {}; } catch { fieldMapping = {}; }
 
   if (!configCache.has(provider.issuer_url)) {
     try {
