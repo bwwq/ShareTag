@@ -1058,7 +1058,12 @@ const LoginView = () => {
 
 // --- ADMIN VIEWS ---
 const AdminLayout = ({ children, currentPath, navigate }) => {
-  const menus = [{ id: '/admin', label: '数据仪表盘', icon: LayoutDashboard }, { id: '/admin/images', label: '内容审核', icon: ShieldCheck }, { id: '/admin/users', label: '用户管理', icon: Users }];
+  const menus = [
+    { id: '/admin', label: '数据仪表盘', icon: LayoutDashboard }, 
+    { id: '/admin/images', label: '内容审核', icon: ShieldCheck }, 
+    { id: '/admin/users', label: '用户管理', icon: Users },
+    { id: '/admin/oidc', label: '配置(OIDC)', icon: LinkIcon }
+  ];
   return (
     <div className="flex h-screen bg-black selection:bg-white/20">
       <div className="w-72 bg-zinc-950 border-r border-white/5 flex flex-col z-10">
@@ -1277,6 +1282,173 @@ const AdminUsers = ({ currentUser }) => {
   );
 };
 
+const AdminOIDC = () => {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [formData, setFormData] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    api.get(`/api/admin/oidc`)
+      .then(res => setData(res || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openModal = (item) => {
+    if (item) {
+      setFormData({ ...item, client_secret: '' }); 
+    } else {
+      setFormData({ 
+        name: '', display_name: '', issuer_url: '', 
+        client_id: '', client_secret: '', redirect_uri: '', 
+        enabled: true 
+      });
+    }
+    setModalOpen(true);
+  };
+
+  const save = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      if (formData.id) {
+        const payload = { ...formData };
+        if (!payload.client_secret) delete payload.client_secret; 
+        await api.put(`/api/admin/oidc/${formData.id}`, payload);
+      } else {
+        await api.post(`/api/admin/oidc`, formData);
+      }
+      setModalOpen(false);
+      load();
+    } catch (err) {
+      alert('保存失败: ' + (err.error || err.message));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const toggleEnabled = async (item) => {
+    if (confirm(`确认${item.enabled ? '停用' : '启用'}此登录方式吗？`)) {
+      await api.put(`/api/admin/oidc/${item.id}`, { enabled: !item.enabled });
+      load();
+    }
+  };
+
+  const deleteItem = async (id) => {
+    if (confirm('警告！一旦删除将无法恢复，确认删除吗？')) {
+      await api.delete(`/api/admin/oidc/${id}`);
+      load();
+    }
+  };
+
+  return (
+    <div className="animate-in fade-in">
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold flex items-center gap-3"><LinkIcon className="w-8 h-8"/> 第三方登录配置</h1>
+        <Button onClick={() => openModal(null)}>+ 新增提供商</Button>
+      </div>
+
+      <div className="bg-zinc-950 rounded-[2rem] border border-white/5 shadow-2xl overflow-hidden relative min-h-[400px]">
+        {loading && <div className="absolute inset-0 z-10 bg-black/50 backdrop-blur-sm flex justify-center items-center"><div className="w-8 h-8 rounded-full border-2 border-white/20 border-t-white animate-spin"></div></div>}
+        <table className="w-full text-left text-sm text-zinc-300">
+          <thead className="bg-zinc-900/50">
+            <tr>
+              <th className="p-5 font-medium text-zinc-400">提供商名称</th>
+              <th className="p-5 font-medium text-zinc-400">Issuer URL</th>
+              <th className="p-5 font-medium text-zinc-400">Client ID</th>
+              <th className="p-5 font-medium text-zinc-400 text-center">状态</th>
+              <th className="p-5 font-medium text-zinc-400 text-center">操作</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {data.map(item => (
+              <tr key={item.id} className="hover:bg-white/[0.02] transition-colors">
+                <td className="p-5 align-middle">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full border border-white/10 bg-zinc-800 flex items-center justify-center font-bold text-white relative flex-shrink-0 overflow-hidden">
+                       {item.icon_url ? <img src={item.icon_url} className="w-full h-full object-cover" /> : item.display_name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-bold text-white tracking-wide">{item.display_name}</p>
+                      <p className="text-xs text-zinc-500 font-mono">ID: {item.name}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className="p-5 align-middle"><span className="text-zinc-400 text-xs font-mono">{item.issuer_url}</span></td>
+                <td className="p-5 align-middle"><span className="text-zinc-400 text-xs font-mono">{item.client_id}</span></td>
+                <td className="p-5 align-middle text-center">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs border ${item.enabled ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-zinc-800 text-zinc-400 border-white/10'}`}>
+                    {item.enabled ? '已启用' : '已停用'}
+                  </span>
+                </td>
+                <td className="p-5 align-middle text-center">
+                  <div className="flex items-center justify-center gap-2">
+                    <Button variant="ghost" onClick={() => toggleEnabled(item)} className="font-medium text-xs px-3 py-1.5 h-auto">{item.enabled ? '停用' : '启用'}</Button>
+                    <Button variant="ghost" onClick={() => openModal(item)} className="font-medium text-xs px-3 py-1.5 h-auto text-blue-400">编辑</Button>
+                    <Button variant="ghost" onClick={() => deleteItem(item.id)} className="font-medium text-xs px-3 py-1.5 h-auto text-red-500 hover:bg-red-500/10">删除</Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {data.length === 0 && !loading && <div className="p-10 text-center text-zinc-500">暂无第三方登录配置</div>}
+      </div>
+
+      {modalOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in overflow-y-auto">
+          <div className="bg-zinc-950 border border-white/10 rounded-[2rem] w-full max-w-2xl shadow-2xl relative my-8 animate-in zoom-in-95 h-[90vh] flex flex-col">
+            <div className="p-6 md:p-8 border-b border-white/10 flex justify-between items-center bg-zinc-900/50 flex-shrink-0">
+              <h3 className="text-xl font-bold text-white">{formData.id ? '编辑提供商配置' : '新增 OIDC 提供商'}</h3>
+              <button onClick={() => setModalOpen(false)} className="text-zinc-500 hover:text-white transition-colors"><X className="w-5 h-5"/></button>
+            </div>
+            <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar flex-1">
+              <form id="oidc-form" onSubmit={save} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-2">唯一标识符 (name) <span className="text-red-500">*</span></label>
+                    <input type="text" required disabled={!!formData.id} value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/30 disabled:opacity-50" placeholder="例如 linuxdo" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-2">显示名称 (display_name) <span className="text-red-500">*</span></label>
+                    <input type="text" required value={formData.display_name} onChange={e=>setFormData({...formData, display_name: e.target.value})} className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/30" placeholder="例如 LINUX DO" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-zinc-400 mb-2">颁发者地址 (issuer_url) <span className="text-red-500">*</span></label>
+                    <input type="url" required value={formData.issuer_url} onChange={e=>setFormData({...formData, issuer_url: e.target.value})} className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-white/30" placeholder="例如 https://connect.linux.do" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-2">Client ID <span className="text-red-500">*</span></label>
+                    <input type="text" required value={formData.client_id} onChange={e=>setFormData({...formData, client_id: e.target.value})} className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-white/30" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-2">Client Secret {formData.id ? '' : <span className="text-red-500">*</span>}</label>
+                    <input type="password" required={!formData.id} value={formData.client_secret || ''} onChange={e=>setFormData({...formData, client_secret: e.target.value})} className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-white/30" placeholder={formData.id ? "留空表示不修改原密钥" : "必填"} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-zinc-400 mb-2">回调地址 (redirect_uri) <span className="text-red-500">*</span></label>
+                    <input type="url" required value={formData.redirect_uri} onChange={e=>setFormData({...formData, redirect_uri: e.target.value})} className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-white/30" placeholder="例如 http://localhost:3000/api/auth/callback/linuxdo" />
+                    <p className="text-[10px] text-zinc-500 mt-1.5">提示：此地址需和你在提供商后台填写的安全回调地址一致</p>
+                  </div>
+                </div>
+              </form>
+            </div>
+            <div className="p-6 md:p-8 border-t border-white/10 flex justify-end gap-3 flex-shrink-0 bg-zinc-900/30">
+              <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>取消</Button>
+              <Button form="oidc-form" type="submit" disabled={submitting}>{submitting ? '保存中...' : '确认保存'}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // --- APP ROOT ---
 export default function App() {
   const [currentPath, setCurrentPath] = useState('/');
@@ -1310,6 +1482,7 @@ export default function App() {
           {currentPath === '/admin' && <AdminDashboard currentUser={user} />}
           {currentPath === '/admin/images' && <AdminImages currentUser={user} />}
           {currentPath === '/admin/users' && <AdminUsers currentUser={user} />}
+          {currentPath === '/admin/oidc' && <AdminOIDC />}
         </AdminLayout>
       );
     }
