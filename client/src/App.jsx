@@ -789,6 +789,7 @@ const UploadView = ({ navigate, user, editId }) => {
   const [promptText, setPromptText] = useState('');
   const [negativeText, setNegativeText] = useState('');
   const [isNsfw, setIsNsfw] = useState(true);
+  const [visibility, setVisibility] = useState('public');
 
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCatName, setNewCatName] = useState('');
@@ -810,6 +811,7 @@ const UploadView = ({ navigate, user, editId }) => {
       setPromptText(data.prompt_text || '');
       setNegativeText(data.negative_prompt_text || '');
       setIsNsfw(data.is_nsfw !== 0);
+      setVisibility(data.visibility || 'public');
       // 填充标签
       const tagsList = Array.isArray(data.tags) ? data.tags.map(t => typeof t === 'string' ? t : t.name) : [];
       setTags(tagsList);
@@ -865,6 +867,7 @@ const UploadView = ({ navigate, user, editId }) => {
           tags: tags.join(', '),
           category_slug: selectedCategory || null,
           is_nsfw: isNsfw,
+          visibility,
         });
         navigate(`/image/${editId}`);
       } else {
@@ -878,6 +881,7 @@ const UploadView = ({ navigate, user, editId }) => {
         if (promptText) fd.append('prompt_text', promptText);
         if (negativeText) fd.append('negative_prompt_text', negativeText);
         fd.append('is_nsfw', isNsfw ? '1' : '0');
+        fd.append('visibility', visibility);
         const result = await api.post('/api/images', fd, true);
         toast(result.status === 'approved' ? '发布成功 ✓' : '已提交，等待审核');
         navigate(result.status === 'approved' ? `/image/${result.id}` : '/');
@@ -957,6 +961,15 @@ const UploadView = ({ navigate, user, editId }) => {
                 <button type="button" onClick={() => setIsNsfw(false)} className={`flex-1 py-3 rounded-xl text-sm font-bold border transition-all ${!isNsfw ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' : 'bg-zinc-900 border-white/10 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>SFW（全年龄）</button>
               </div>
               <p className="text-[10px] text-zinc-500 mt-1.5">默认为 NSFW，未登录用户将无法查看 NSFW 内容</p>
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-zinc-300 mb-3">可见范围</label>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setVisibility('public')} className={`flex-1 py-3 rounded-xl text-sm font-bold border transition-all ${visibility === 'public' ? 'bg-blue-500/20 border-blue-500/40 text-blue-400' : 'bg-zinc-900 border-white/10 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>公开</button>
+                <button type="button" onClick={() => setVisibility('trusted')} className={`flex-1 py-3 rounded-xl text-sm font-bold border transition-all ${visibility === 'trusted' ? 'bg-amber-500/20 border-amber-500/40 text-amber-400' : 'bg-zinc-900 border-white/10 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>信任用户</button>
+                <button type="button" onClick={() => setVisibility('private')} className={`flex-1 py-3 rounded-xl text-sm font-bold border transition-all ${visibility === 'private' ? 'bg-purple-500/20 border-purple-500/40 text-purple-400' : 'bg-zinc-900 border-white/10 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>仅自己</button>
+              </div>
+              <p className="text-[10px] text-zinc-500 mt-1.5">公开：所有人可见　信任用户：仅信任用户和管理员可见　仅自己：仅自己和管理员可见</p>
             </div>
             <div className="space-y-6">
               <div>

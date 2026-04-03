@@ -65,6 +65,7 @@ function formatImage(img, tags) {
     views: img.views || 0,
     status: img.status,
     is_nsfw: img.is_nsfw ?? 1,
+    visibility: img.visibility || 'public',
     prompt_text: img.prompt_text,
     negative_prompt_text: img.negative_prompt_text,
     created_at: img.created_at,
@@ -98,6 +99,17 @@ router.get('/', optionalAuth, (req, res) => {
 
   // 未登录用户不展示 NSFW 内容
   if (!req.user) { where.push('i.is_nsfw = 0'); }
+
+  // 私有/信任图片可见性过滤
+  if (!req.user) {
+    where.push("i.visibility = 'public'");
+  } else if (req.user.role === 'admin' || req.user.role === 'trusted') {
+    // 管理员和信任用户可见所有（除了别人的 private）
+    where.push("(i.visibility != 'private' OR i.user_id = ?)"); params.push(req.user.id);
+  } else {
+    // 普通用户：只能看 public + 自己的
+    where.push("(i.visibility = 'public' OR i.user_id = ?)"); params.push(req.user.id);
+  }
 
   if (status !== 'all') { where.push('i.status = ?'); params.push(status); }
   if (userId) { where.push('i.user_id = ?'); params.push(userId); }
@@ -162,6 +174,17 @@ router.get('/:id', optionalAuth, (req, res) => {
   // 未登录用户不能查看 NSFW 内容
   if (image.is_nsfw && !req.user) {
     return res.status(403).json({ error: '请登录后查看该内容' });
+  }
+
+  // 可见性检查
+  if (image.visibility === 'private') {
+    if (!req.user || (req.user.id !== image.user_id && req.user.role !== 'admin')) {
+      return res.status(404).json({ error: '图片不存在' });
+    }
+  } else if (image.visibility === 'trusted') {
+    if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'trusted' && req.user.id !== image.user_id)) {
+      return res.status(404).json({ error: '图片不存在' });
+    }
   }
 
   // 增加浏览量
@@ -257,9 +280,10 @@ router.post('/', requireAuth, upload.single('file'), async (req, res, next) => {
       const promptText = req.body.prompt_text || null;
       const negativeText = req.body.negative_prompt_text || null;
       const isNsfw = req.body.is_nsfw !== undefined ? (req.body.is_nsfw === '0' || req.body.is_nsfw === false ? 0 : 1) : 1;
+      const visibility = ['public', 'trusted', 'private'].includes(req.body.visibility) ? req.body.visibility : 'public';
       const result = dbRun(
-        `INSERT INTO images (user_id, title, description, storage_type, file_path, thumbnail_path, status, raw_tags, prompt_text, negative_prompt_text, is_nsfw) VALUES (?, ?, ?, 'url', ?, NULL, ?, ?, ?, ?, ?)`,
-        user.id, req.body.title || null, req.body.description || null, req.body.url, status, rawTags, promptText, negativeText, isNsfw
+        `INSERT INTO images (user_id, title, description, storage_type, file_path, thumbnail_path, status, raw_tags, prompt_text, negative_prompt_text, is_nsfw, visibility) VALUES (?, ?, ?, 'url', ?, NULL, ?, ?, ?, ?, ?, ?)`,
+        user.id, req.body.title || null, req.body.description || null, req.body.url, status, rawTags, promptText, negativeText, isNsfw, visibility
       );
       imageId = result.lastInsertRowid;
       syncImageTags(imageId, parseTags(rawTags), req.body.category_slug);
@@ -292,10 +316,11 @@ router.post('/', requireAuth, upload.single('file'), async (req, res, next) => {
       const saved = await saveImage(comp.buffer, ext);
 
       const isNsfw = req.body.is_nsfw !== undefined ? (req.body.is_nsfw === '0' || req.body.is_nsfw === false ? 0 : 1) : 1;
+      const visibility = ['public', 'trusted', 'private'].includes(req.body.visibility) ? req.body.visibility : 'public';
       const result = dbRun(
-        `INSERT INTO images (user_id, title, description, storage_type, file_path, thumbnail_path, width, height, file_size, status, raw_tags, prompt_text, negative_prompt_text, is_nsfw) VALUES (?, ?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO images (user_id, title, description, storage_type, file_path, thumbnail_path, width, height, file_size, status, raw_tags, prompt_text, negative_prompt_text, is_nsfw, visibility) VALUES (?, ?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         user.id, req.body.title || req.file.originalname || null, req.body.description || null,
-        saved.path, thumb.path, comp.width, comp.height, comp.size, status, rawTags, promptText, negativeText, isNsfw
+        saved.path, thumb.path, comp.width, comp.height, comp.size, status, rawTags, promptText, negativeText, isNsfw, visibility
       );
       imageId = result.lastInsertRowid;
       syncImageTags(imageId, parseTags(rawTags), req.body.category_slug);
@@ -324,6 +349,7 @@ router.put('/:id', requireAuth, (req, res, next) => {
     if (description !== undefined) { updates.push('description = ?'); params.push(description); }
     if (tags !== undefined) { updates.push('raw_tags = ?'); params.push(parseTags(tags).join(', ')); }
     if (is_nsfw !== undefined) { updates.push('is_nsfw = ?'); params.push(is_nsfw ? 1 : 0); }
+    if (req.body.visibility !== undefined) { updates.push('visibility = ?'); params.push(['public', 'trusted', 'private'].includes(req.body.visibility) ? req.body.visibility : 'public'); }
 
     if (updates.length > 0) {
       params.push(id);
