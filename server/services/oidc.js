@@ -20,12 +20,44 @@ export async function getOidcProvider(providerName) {
   try { fieldMapping = JSON.parse(provider.field_mapping || '{}'); } catch { fieldMapping = {}; }
 
   if (!configCache.has(provider.issuer_url)) {
-    const config = await client.discovery(
-      new URL(provider.issuer_url),
-      provider.client_id,
-      clientSecret,
-    );
-    configCache.set(provider.issuer_url, config);
+    try {
+      const config = await client.discovery(
+        new URL(provider.issuer_url),
+        provider.client_id,
+        clientSecret,
+      );
+      configCache.set(provider.issuer_url, config);
+    } catch {
+      // 非标准 OIDC（如 Discord）：手动构建配置
+      const knownProviders = {
+        'https://discord.com': {
+          authorization_endpoint: 'https://discord.com/api/oauth2/authorize',
+          token_endpoint: 'https://discord.com/api/oauth2/token',
+          userinfo_endpoint: 'https://discord.com/api/users/@me',
+        },
+        'https://github.com': {
+          authorization_endpoint: 'https://github.com/login/oauth/authorize',
+          token_endpoint: 'https://github.com/login/oauth/access_token',
+          userinfo_endpoint: 'https://api.github.com/user',
+        },
+      };
+      const known = knownProviders[provider.issuer_url];
+      if (!known) throw new Error(`OIDC discovery failed for ${provider.issuer_url}, and no manual config available`);
+
+      // 构造一个伪装的 config 对象，提供 serverMetadata() 方法
+      const manualConfig = {
+        serverMetadata: () => ({
+          issuer: provider.issuer_url,
+          ...known,
+        }),
+        __manual: true,
+        __clientId: provider.client_id,
+        __clientSecret: clientSecret,
+        __tokenEndpoint: known.token_endpoint,
+        __userinfoEndpoint: known.userinfo_endpoint,
+      };
+      configCache.set(provider.issuer_url, manualConfig);
+    }
   }
 
   return {
@@ -56,27 +88,60 @@ export function buildAuthUrl(oidcConfig, provider, state, nonce) {
 }
 
 export async function exchangeCodeForUser(oidcConfig, provider, clientSecret, code, state, nonce, fieldMapping) {
-  const tokens = await client.authorizationCodeGrant(
-    oidcConfig,
-    new URL(`${provider.redirect_uri}?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`),
-    { expectedState: state, expectedNonce: nonce },
-  );
-
   let userinfo;
-  if (provider.userinfo_endpoint) {
-    const resp = await fetch(provider.userinfo_endpoint, {
-      headers: { Authorization: `Bearer ${tokens.access_token}` },
+
+  if (oidcConfig.__manual) {
+    // 手动配置模式（Discord / GitHub 等非标准 OIDC）
+    const tokenResp = await fetch(oidcConfig.__tokenEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: oidcConfig.__clientId,
+        client_secret: oidcConfig.__clientSecret,
+        code,
+        redirect_uri: provider.redirect_uri,
+      }),
     });
-    userinfo = await resp.json();
+    const tokenData = await tokenResp.json();
+    if (!tokenData.access_token) throw new Error('Token exchange failed: ' + JSON.stringify(tokenData));
+
+    const userinfoResp = await fetch(oidcConfig.__userinfoEndpoint, {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+    userinfo = await userinfoResp.json();
   } else {
-    userinfo = await client.fetchUserInfo(oidcConfig, tokens.access_token, tokens.claims().sub);
+    // 标准 OIDC 流程
+    const tokens = await client.authorizationCodeGrant(
+      oidcConfig,
+      new URL(`${provider.redirect_uri}?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`),
+      { expectedState: state, expectedNonce: nonce },
+    );
+
+    if (provider.userinfo_endpoint) {
+      const resp = await fetch(provider.userinfo_endpoint, {
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      });
+      userinfo = await resp.json();
+    } else {
+      userinfo = await client.fetchUserInfo(oidcConfig, tokens.access_token, tokens.claims().sub);
+    }
+  }
+
+  // Discord 头像特殊处理：avatar 字段只是 hash，需拼成完整 URL
+  let avatarUrl = getVal(userinfo, fieldMapping.avatar_url) || null;
+  if (!avatarUrl && userinfo.avatar && userinfo.id) {
+    avatarUrl = `https://cdn.discordapp.com/avatars/${userinfo.id}/${userinfo.avatar}.png`;
   }
 
   return {
-    sub: String(getVal(userinfo, fieldMapping.sub) || userinfo.sub),
-    username: getVal(userinfo, fieldMapping.username) || getVal(userinfo, 'name') || 'User',
+    sub: String(getVal(userinfo, fieldMapping.sub) || userinfo.sub || userinfo.id),
+    username: getVal(userinfo, fieldMapping.username) || getVal(userinfo, 'username') || getVal(userinfo, 'name') || getVal(userinfo, 'login') || 'User',
     email: getVal(userinfo, fieldMapping.email) || null,
-    avatar_url: getVal(userinfo, fieldMapping.avatar_url) || null,
+    avatar_url: avatarUrl,
     trust_level: fieldMapping.trust_level ? (parseInt(getVal(userinfo, fieldMapping.trust_level)) || 0) : 0,
     raw: userinfo,
   };
