@@ -99,8 +99,8 @@ router.get('/callback/:provider', async (req, res, next) => {
     }
 
     req.session.userId = user.id;
-    const frontendUrl = process.env.FRONTEND_URL || '';
-    res.redirect(frontendUrl || '/');
+    const frontendUrl = process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`;
+    res.redirect(frontendUrl);
   } catch (e) {
     next(e);
   }
