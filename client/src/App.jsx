@@ -424,8 +424,8 @@ const ImageCard = ({ image, onClick }) => {
   const [imgError, setImgError] = useState(false);
   if (imgError) return null;
   return (
-  <div className="group relative mb-6 break-inside-avoid cursor-pointer overflow-hidden rounded-3xl bg-zinc-900 border border-white/5 shadow-xl shadow-black/50 max-h-[500px]" onClick={() => onClick(image.id)}>
-    <img src={image.thumbnail_url || image.image_url} alt={image.title} loading="lazy" onError={() => setImgError(true)} className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-1000 ease-out" />
+  <div className="group relative cursor-pointer overflow-hidden rounded-3xl bg-zinc-900 border border-white/5 shadow-xl shadow-black/50 aspect-[3/4]" onClick={() => onClick(image.id)}>
+    <img src={image.thumbnail_url || image.image_url} alt={image.title} loading="lazy" onError={() => setImgError(true)} className="absolute inset-0 w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-1000 ease-out" />
     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-black/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
       <div className="absolute top-4 left-4 flex gap-2">
         {parsedTags.slice(0, 2).map((tag, i) => (
@@ -522,7 +522,7 @@ const HomeView = ({ navigate, searchQuery }) => {
         {images.length === 0 ? (
            <div className="py-20 text-center text-zinc-500 w-full animate-in fade-in">暂无作品，去上传第一张吧</div>
         ) : (
-          <div className="w-full columns-1 sm:columns-2 md:columns-3 xl:columns-4 2xl:columns-5 gap-6">
+          <div className="w-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
             {images.map((img) => <ImageCard key={img.id} image={img} onClick={(id) => navigate(`/image/${id}`)} />)}
           </div>
         )}
