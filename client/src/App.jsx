@@ -857,9 +857,8 @@ const UploadView = ({ navigate, user, editId }) => {
         if (promptText) fd.append('prompt_text', promptText);
         if (negativeText) fd.append('negative_prompt_text', negativeText);
         fd.append('is_nsfw', isNsfw ? '1' : '0');
-        await api.post('/api/images', fd, true);
-        alert('发布成功，请等待审核！');
-        navigate('/');
+        const result = await api.post('/api/images', fd, true);
+        navigate(result.status === 'approved' ? `/image/${result.id}` : '/');
       }
     } catch(e) {
       alert((isEditMode ? '保存' : '发布') + '失败: ' + e.message);
