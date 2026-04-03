@@ -45,6 +45,7 @@ export async function initDb() {
   try { db.exec('ALTER TABLE images ADD COLUMN views INTEGER DEFAULT 0'); console.log('[DB] Migrated: added views to images'); } catch (e) {}
   try { db.exec('ALTER TABLE images ADD COLUMN prompt_text TEXT'); console.log('[DB] Migrated: added prompt_text to images'); } catch (e) {}
   try { db.exec('ALTER TABLE images ADD COLUMN negative_prompt_text TEXT'); console.log('[DB] Migrated: added negative_prompt_text to images'); } catch (e) {}
+  try { db.exec('ALTER TABLE images ADD COLUMN is_nsfw INTEGER NOT NULL DEFAULT 1'); console.log('[DB] Migrated: added is_nsfw to images'); } catch (e) {}
 
   console.log('[DB] SQLite initialized at', dbPath);
   return db;

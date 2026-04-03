@@ -767,6 +767,7 @@ const UploadView = ({ navigate, user, editId }) => {
   
   const [promptText, setPromptText] = useState('');
   const [negativeText, setNegativeText] = useState('');
+  const [isNsfw, setIsNsfw] = useState(true);
 
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCatName, setNewCatName] = useState('');
@@ -787,6 +788,7 @@ const UploadView = ({ navigate, user, editId }) => {
       setPreview(data.image_url);
       setPromptText(data.prompt_text || '');
       setNegativeText(data.negative_prompt_text || '');
+      setIsNsfw(data.is_nsfw !== 0);
       // 填充标签
       const tagsList = Array.isArray(data.tags) ? data.tags.map(t => typeof t === 'string' ? t : t.name) : [];
       setTags(tagsList);
@@ -841,6 +843,7 @@ const UploadView = ({ navigate, user, editId }) => {
           description: description || null,
           tags: tags.join(', '),
           category_slug: selectedCategory || null,
+          is_nsfw: isNsfw,
         });
         navigate(`/image/${editId}`);
       } else {
@@ -853,6 +856,7 @@ const UploadView = ({ navigate, user, editId }) => {
         fd.append('tags', tags.join(', '));
         if (promptText) fd.append('prompt_text', promptText);
         if (negativeText) fd.append('negative_prompt_text', negativeText);
+        fd.append('is_nsfw', isNsfw ? '1' : '0');
         await api.post('/api/images', fd, true);
         alert('发布成功，请等待审核！');
         navigate('/');
@@ -924,6 +928,14 @@ const UploadView = ({ navigate, user, editId }) => {
               ) : (
                 <DropdownSelect options={categories.map(c=>({value:c.slug, label:c.name}))} value={selectedCategory} onChange={setSelectedCategory} placeholder="请选择或尝试新建"/>
               )}
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-zinc-300 mb-3">内容分级</label>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setIsNsfw(true)} className={`flex-1 py-3 rounded-xl text-sm font-bold border transition-all ${isNsfw ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-zinc-900 border-white/10 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>NSFW</button>
+                <button type="button" onClick={() => setIsNsfw(false)} className={`flex-1 py-3 rounded-xl text-sm font-bold border transition-all ${!isNsfw ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' : 'bg-zinc-900 border-white/10 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>SFW（全年龄）</button>
+              </div>
+              <p className="text-[10px] text-zinc-500 mt-1.5">默认为 NSFW，未登录用户将无法查看 NSFW 内容</p>
             </div>
             <div className="space-y-6">
               <div>
