@@ -19,44 +19,40 @@ export async function getOidcProvider(providerName) {
   let fieldMapping;
   try { fieldMapping = JSON.parse(provider.field_mapping || '{}') || {}; } catch { fieldMapping = {}; }
 
+  // 已知的非标准 OAuth2 提供商，直接手动配置，不走 OIDC discovery
+  const knownProviders = {
+    'https://discord.com': {
+      authorization_endpoint: 'https://discord.com/api/oauth2/authorize',
+      token_endpoint: 'https://discord.com/api/oauth2/token',
+      userinfo_endpoint: 'https://discord.com/api/users/@me',
+    },
+    'https://github.com': {
+      authorization_endpoint: 'https://github.com/login/oauth/authorize',
+      token_endpoint: 'https://github.com/login/oauth/access_token',
+      userinfo_endpoint: 'https://api.github.com/user',
+    },
+  };
+
   if (!configCache.has(provider.issuer_url)) {
-    try {
+    const known = knownProviders[provider.issuer_url];
+    if (known) {
+      // 非标准 OAuth2：手动构建配置
+      configCache.set(provider.issuer_url, {
+        serverMetadata: () => ({ issuer: provider.issuer_url, ...known }),
+        __manual: true,
+        __clientId: provider.client_id,
+        __clientSecret: clientSecret,
+        __tokenEndpoint: known.token_endpoint,
+        __userinfoEndpoint: known.userinfo_endpoint,
+      });
+    } else {
+      // 标准 OIDC：自动发现
       const config = await client.discovery(
         new URL(provider.issuer_url),
         provider.client_id,
         clientSecret,
       );
       configCache.set(provider.issuer_url, config);
-    } catch {
-      // 非标准 OIDC（如 Discord）：手动构建配置
-      const knownProviders = {
-        'https://discord.com': {
-          authorization_endpoint: 'https://discord.com/api/oauth2/authorize',
-          token_endpoint: 'https://discord.com/api/oauth2/token',
-          userinfo_endpoint: 'https://discord.com/api/users/@me',
-        },
-        'https://github.com': {
-          authorization_endpoint: 'https://github.com/login/oauth/authorize',
-          token_endpoint: 'https://github.com/login/oauth/access_token',
-          userinfo_endpoint: 'https://api.github.com/user',
-        },
-      };
-      const known = knownProviders[provider.issuer_url];
-      if (!known) throw new Error(`OIDC discovery failed for ${provider.issuer_url}, and no manual config available`);
-
-      // 构造一个伪装的 config 对象，提供 serverMetadata() 方法
-      const manualConfig = {
-        serverMetadata: () => ({
-          issuer: provider.issuer_url,
-          ...known,
-        }),
-        __manual: true,
-        __clientId: provider.client_id,
-        __clientSecret: clientSecret,
-        __tokenEndpoint: known.token_endpoint,
-        __userinfoEndpoint: known.userinfo_endpoint,
-      };
-      configCache.set(provider.issuer_url, manualConfig);
     }
   }
 
