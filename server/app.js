@@ -91,6 +91,10 @@ export async function createApp() {
     message: { error: '请求过于频繁，请稍后再试' },
   }));
 
+  // 认证接口专用严格限流（防暴力破解 + 批量注册）
+  const authLimiter = rateLimit({ windowMs: 60_000, max: 5, message: { error: '登录/注册请求过于频繁' } });
+  app.use('/api/auth/local', authLimiter);
+
   const uploadLimiter = rateLimit({ windowMs: 60_000, max: 10, message: { error: '上传过于频繁' } });
   app.use('/api/images', (req, res, next) => {
     if (req.method === 'POST') return uploadLimiter(req, res, next);
@@ -99,6 +103,29 @@ export async function createApp() {
 
   // ===== 静态文件 =====
   const uploadDir = process.env.UPLOAD_DIR || join(__dirname, '..', 'uploads');
+
+  // 防盗链中间件：阻止外站通过 <img src> 直接引用本站图片
+  app.use('/uploads', (req, res, next) => {
+    const referer = req.get('referer') || '';
+    // 允许无 referer（浏览器直接访问）和本站 referer
+    if (!referer) return next();
+    try {
+      const refOrigin = new URL(referer).origin;
+      // 构建本站 origin 用于比较
+      const proto = req.protocol;
+      const host = req.get('host'); // 包含端口，如 localhost:3000
+      const selfOrigin = `${proto}://${host}`;
+      if (refOrigin === selfOrigin) return next();
+      // 也检查 FRONTEND_URL
+      const frontendUrl = process.env.FRONTEND_URL;
+      if (frontendUrl) {
+        const feOrigin = new URL(frontendUrl).origin;
+        if (refOrigin === feOrigin) return next();
+      }
+    } catch {}
+    return res.status(403).end();
+  });
+
   app.use('/uploads', express.static(uploadDir, { maxAge: '30d', immutable: true }));
 
   const publicDir = join(__dirname, '..', 'public');

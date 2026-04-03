@@ -1,5 +1,8 @@
 import { dbGet } from '../db/init.js';
 
+// 安全列名：不包含 password_hash
+const USER_SAFE_COLS = 'id, username, email, avatar_url, role, oidc_provider, oidc_sub, oidc_trust_level, created_at, updated_at, is_banned';
+
 /**
  * 要求用户已登录
  */
@@ -8,7 +11,7 @@ export function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
-  const user = dbGet('SELECT * FROM users WHERE id = ?', req.session.userId);
+  const user = dbGet(`SELECT ${USER_SAFE_COLS} FROM users WHERE id = ?`, req.session.userId);
   if (!user) {
     req.session.destroy(() => {});
     return res.status(401).json({ error: 'User not found' });
@@ -43,7 +46,7 @@ export function requireRole(...roles) {
  */
 export function optionalAuth(req, res, next) {
   if (req.session?.userId) {
-    const user = dbGet('SELECT * FROM users WHERE id = ? AND is_banned = 0', req.session.userId);
+    const user = dbGet(`SELECT ${USER_SAFE_COLS} FROM users WHERE id = ? AND is_banned = 0`, req.session.userId);
     if (user) req.user = user;
   }
   next();

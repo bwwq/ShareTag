@@ -47,6 +47,11 @@ router.get('/callback/:provider', async (req, res, next) => {
     const savedNonce = req.session.oidcNonce;
     const providerName = req.params.provider;
 
+    // 验证 provider 一致性，防止跨 provider 攻击
+    if (providerName !== req.session.oidcProvider) {
+      return res.status(400).json({ error: 'Provider mismatch' });
+    }
+
     if (!code || !state || state !== savedState) {
       return res.status(400).json({ error: 'State 验证失败' });
     }
@@ -140,30 +145,30 @@ router.get('/status', (req, res) => {
   res.json({ needsSetup: count === 0, hasProviders: true });
 });
 
-// POST /api/auth/local/register
+// POST /api/auth/local/register（仅允许首个用户注册为管理员，之后关闭）
 router.post('/local/register', async (req, res) => {
   try {
+    const userCount = dbGet('SELECT COUNT(*) as c FROM users').c;
+    if (userCount > 0) {
+      return res.status(403).json({ error: '本地注册已关闭，请使用第三方登录' });
+    }
+
     const { username, password } = req.body;
     if (!username || !password || username.length < 3 || password.length < 6) {
       return res.status(400).json({ error: '用户名至少3位，密码至少6位' });
     }
 
-    const userCount = dbGet('SELECT COUNT(*) as c FROM users').c;
-    const role = userCount === 0 ? 'admin' : 'user';
-
-    const existing = dbGet("SELECT * FROM users WHERE username = ? AND oidc_provider = 'local'", username);
-    if (existing) return res.status(400).json({ error: '用户名已被注册' });
-
     const hash = await bcrypt.hash(password, 10);
     const result = dbRun(
       `INSERT INTO users (username, role, oidc_provider, oidc_sub, password_hash) VALUES (?, ?, 'local', ?, ?)`,
-      username, role, username, hash
+      username, 'admin', username, hash
     );
 
     req.session.userId = result.lastInsertRowid;
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: '注册失败: ' + e.message });
+    console.error('[Auth] Register error:', e.message);
+    res.status(500).json({ error: '注册失败' });
   }
 });
 
@@ -203,7 +208,7 @@ router.put('/local/password', requireAuth, async (req, res) => {
 router.post('/local/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    const user = dbGet("SELECT * FROM users WHERE username = ? AND oidc_provider = 'local'", username);
+    const user = dbGet("SELECT id, password_hash, is_banned FROM users WHERE username = ? AND oidc_provider = 'local'", username);
     if (!user || user.is_banned) {
       return res.status(401).json({ error: '用户名或密码错误' });
     }
@@ -214,7 +219,8 @@ router.post('/local/login', async (req, res) => {
     req.session.userId = user.id;
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: '登录失败: ' + e.message });
+    console.error('[Auth] Login error:', e.message);
+    res.status(500).json({ error: '登录失败' });
   }
 });
 // PUT /api/auth/profile — 仅管理员可修改自己的名字和头像
@@ -240,29 +246,57 @@ router.get('/users/:id', (req, res) => {
   const user = dbGet('SELECT id, username, avatar_url, role, created_at FROM users WHERE id = ? AND is_banned = 0', id);
   if (!user) return res.status(404).json({ error: '用户不存在' });
 
+  // 判断访问者身份
+  let viewerId = null, viewerRole = null;
+  if (req.session?.userId) {
+    const viewer = dbGet('SELECT id, role FROM users WHERE id = ? AND is_banned = 0', req.session.userId);
+    if (viewer) { viewerId = viewer.id; viewerRole = viewer.role; }
+  }
+  const isSelf = viewerId === id;
+  const isAdminOrTrusted = viewerRole === 'admin' || viewerRole === 'trusted';
+
+  // 可见性过滤条件
+  let visWhere = '';
+  const visParams = [];
+  if (!viewerId) {
+    // 未登录：只能看 public + 非 NSFW
+    visWhere = "AND i.visibility = 'public' AND i.is_nsfw = 0";
+  } else if (isSelf || viewerRole === 'admin') {
+    // 自己或管理员：全部可见
+    visWhere = '';
+  } else if (viewerRole === 'trusted') {
+    // 信任用户：public + trusted
+    visWhere = "AND i.visibility != 'private'";
+  } else {
+    // 普通用户：只能看 public
+    visWhere = "AND i.visibility = 'public'";
+  }
+
   const uploads = dbAll(
-    `SELECT i.*, u.username, u.avatar_url FROM images i JOIN users u ON i.user_id = u.id WHERE i.user_id = ? AND i.status = 'approved' ORDER BY i.created_at DESC`,
-    id
+    `SELECT i.*, u.username, u.avatar_url FROM images i JOIN users u ON i.user_id = u.id WHERE i.user_id = ? AND i.status = 'approved' ${visWhere} ORDER BY i.created_at DESC`,
+    id, ...visParams
   );
-  const bookmarks = dbAll(
-    `SELECT i.*, u.username, u.avatar_url FROM bookmarks b JOIN images i ON b.image_id = i.id JOIN users u ON i.user_id = u.id WHERE b.user_id = ? AND i.status = 'approved' ORDER BY b.created_at DESC`,
-    id
-  );
+
+  // 书签仅本人和管理员可见
+  let bookmarks = [];
+  if (isSelf || viewerRole === 'admin') {
+    bookmarks = dbAll(
+      `SELECT i.*, u.username, u.avatar_url FROM bookmarks b JOIN images i ON b.image_id = i.id JOIN users u ON i.user_id = u.id WHERE b.user_id = ? AND i.status = 'approved' ${visWhere} ORDER BY b.created_at DESC`,
+      id, ...visParams
+    );
+  }
+
+  const formatImg = (img) => ({
+    id: img.id, title: img.title, image_url: img.file_path,
+    thumbnail_url: img.thumbnail_path || img.file_path,
+    width: img.width, height: img.height, likes: img.likes || 0, views: img.views || 0,
+    user: { id: img.user_id, username: img.username, avatar_url: img.avatar_url },
+  });
 
   res.json({
     user,
-    uploads: uploads.map(img => ({
-      id: img.id, title: img.title, image_url: img.file_path,
-      thumbnail_url: img.thumbnail_path || img.file_path,
-      width: img.width, height: img.height, likes: img.likes || 0, views: img.views || 0,
-      user: { id: img.user_id, username: img.username, avatar_url: img.avatar_url },
-    })),
-    bookmarks: bookmarks.map(img => ({
-      id: img.id, title: img.title, image_url: img.file_path,
-      thumbnail_url: img.thumbnail_path || img.file_path,
-      width: img.width, height: img.height, likes: img.likes || 0, views: img.views || 0,
-      user: { id: img.user_id, username: img.username, avatar_url: img.avatar_url },
-    })),
+    uploads: uploads.map(formatImg),
+    bookmarks: bookmarks.map(formatImg),
   });
 });
 

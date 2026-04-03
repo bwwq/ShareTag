@@ -120,7 +120,9 @@ router.get('/users', requireAuth, requireRole('admin'), (req, res) => {
 
   const total = dbGet(`SELECT COUNT(*) as c FROM users u ${whereClause}`, ...params).c;
   const rows = dbAll(
-    `SELECT u.*, (SELECT COUNT(*) FROM images WHERE user_id = u.id) as upload_count FROM users u ${whereClause} ORDER BY u.created_at DESC LIMIT ? OFFSET ?`,
+    `SELECT u.id, u.username, u.email, u.avatar_url, u.role, u.oidc_provider, u.oidc_sub, u.oidc_trust_level, u.created_at, u.is_banned,
+            (SELECT COUNT(*) FROM images WHERE user_id = u.id) as upload_count
+     FROM users u ${whereClause} ORDER BY u.created_at DESC LIMIT ? OFFSET ?`,
     ...params, limit, offset
   );
 
@@ -160,8 +162,16 @@ router.delete('/users/:id', requireAuth, requireRole('admin'), (req, res) => {
   const images = dbAll("SELECT * FROM images WHERE user_id = ? AND storage_type = 'local'", id);
   for (const img of images) { deleteFile(img.file_path); deleteFile(img.thumbnail_path); }
 
+  // 收集受影响的 tag id
+  const affectedTagIds = dbAll('SELECT DISTINCT it.tag_id FROM image_tags it JOIN images i ON it.image_id = i.id WHERE i.user_id = ?', id).map(r => r.tag_id);
+
+  // 级联删除用户及其所有关联数据
   dbRun('DELETE FROM users WHERE id = ?', id);
-  dbRun('UPDATE tags SET use_count = (SELECT COUNT(*) FROM image_tags WHERE tag_id = tags.id)');
+
+  // 局部更新受影响 tag
+  for (const tid of affectedTagIds) {
+    dbRun('UPDATE tags SET use_count = (SELECT COUNT(*) FROM image_tags WHERE tag_id = ?) WHERE id = ?', tid, tid);
+  }
   res.json({ ok: true });
 });
 
@@ -226,16 +236,16 @@ router.delete('/images/:id', requireAuth, requireRole('trusted', 'admin'), (req,
   const image = dbGet('SELECT * FROM images WHERE id = ?', id);
   if (!image) return res.status(404).json({ error: '图片不存在' });
 
-  // 1. 删除物理文件
   if (image.storage_type === 'local') {
     deleteFile(image.file_path);
     if (image.thumbnail_path) deleteFile(image.thumbnail_path);
   }
 
-  // 2. 数据库级联删除自动处理关联 tag，如果没有级联则手动触发
-  dbRun('DELETE FROM image_tags WHERE image_id = ?', id);
+  const affectedTagIds = dbAll('SELECT tag_id FROM image_tags WHERE image_id = ?', id).map(r => r.tag_id);
   dbRun('DELETE FROM images WHERE id = ?', id);
-  dbRun('UPDATE tags SET use_count = (SELECT COUNT(*) FROM image_tags WHERE tag_id = tags.id)');
+  for (const tid of affectedTagIds) {
+    dbRun('UPDATE tags SET use_count = (SELECT COUNT(*) FROM image_tags WHERE tag_id = ?) WHERE id = ?', tid, tid);
+  }
   
   res.json({ ok: true });
 });

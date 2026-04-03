@@ -11,7 +11,8 @@ INSERT OR IGNORE INTO site_config (key, value) VALUES
   ('allowed_extensions', '"jpg,jpeg,png,webp,gif"'),
   ('default_storage', '"local"'),
   ('thumb_width', '320'),
-  ('images_per_page', '24');
+  ('images_per_page', '24'),
+  ('max_uploads_per_user', '100');
 
 INSERT OR IGNORE INTO categories (id, name, slug, sort_order) VALUES
   (1, '三次元', 'real', 99),

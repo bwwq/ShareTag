@@ -24,8 +24,17 @@ function parseTags(rawTags) {
 }
 
 function syncImageTags(imageId, tagNames, categorySlug = null) {
+  // 记录变更前的 tag id 集合
+  const oldTagIds = dbAll('SELECT tag_id FROM image_tags WHERE image_id = ?', imageId).map(r => r.tag_id);
+
   dbRun('DELETE FROM image_tags WHERE image_id = ?', imageId);
-  if (tagNames.length === 0) return;
+  if (tagNames.length === 0) {
+    // 只更新被删除的旧 tag 的 use_count
+    for (const tid of oldTagIds) {
+      dbRun('UPDATE tags SET use_count = (SELECT COUNT(*) FROM image_tags WHERE tag_id = ?) WHERE id = ?', tid, tid);
+    }
+    return;
+  }
 
   let categoryId = null;
   if (categorySlug) {
@@ -33,6 +42,7 @@ function syncImageTags(imageId, tagNames, categorySlug = null) {
     if (cat) categoryId = cat.id;
   }
 
+  const newTagIds = [];
   for (const name of tagNames) {
     if (categoryId) {
       dbRun('INSERT OR IGNORE INTO tags (name, category_id) VALUES (?, ?)', name, categoryId);
@@ -41,11 +51,17 @@ function syncImageTags(imageId, tagNames, categorySlug = null) {
       dbRun('INSERT OR IGNORE INTO tags (name) VALUES (?)', name);
     }
     const tag = dbGet('SELECT id FROM tags WHERE name = ?', name);
-    if (tag) dbRun('INSERT OR IGNORE INTO image_tags (image_id, tag_id) VALUES (?, ?)', imageId, tag.id);
+    if (tag) {
+      dbRun('INSERT OR IGNORE INTO image_tags (image_id, tag_id) VALUES (?, ?)', imageId, tag.id);
+      newTagIds.push(tag.id);
+    }
   }
 
-  // 更新全局 use_count
-  dbRun('UPDATE tags SET use_count = (SELECT COUNT(*) FROM image_tags WHERE tag_id = tags.id)');
+  // 只更新受影响的 tag 的 use_count
+  const affectedIds = [...new Set([...oldTagIds, ...newTagIds])];
+  for (const tid of affectedIds) {
+    dbRun('UPDATE tags SET use_count = (SELECT COUNT(*) FROM image_tags WHERE tag_id = ?) WHERE id = ?', tid, tid);
+  }
 }
 
 function formatImage(img, tags) {
@@ -219,18 +235,26 @@ router.get('/:id', optionalAuth, (req, res) => {
 
 // POST /api/images/:id/like（按 IP 去重）
 router.post('/:id/like', optionalAuth, (req, res) => {
-  const id = parseInt(req.params.id);
-  const clientIp = getClientIp(req);
-  const existing = dbGet('SELECT 1 FROM image_likes WHERE image_id = ? AND ip_address = ?', id, clientIp);
-  if (existing) return res.json({ ok: true, already_liked: true });
-  dbRun('INSERT INTO image_likes (image_id, ip_address) VALUES (?, ?)', id, clientIp);
-  dbRun('UPDATE images SET likes = likes + 1 WHERE id = ?', id);
-  res.json({ ok: true });
+  try {
+    const id = parseInt(req.params.id);
+    const image = dbGet('SELECT id FROM images WHERE id = ?', id);
+    if (!image) return res.status(404).json({ error: '图片不存在' });
+    const clientIp = getClientIp(req);
+    const existing = dbGet('SELECT 1 FROM image_likes WHERE image_id = ? AND ip_address = ?', id, clientIp);
+    if (existing) return res.json({ ok: true, already_liked: true });
+    dbRun('INSERT INTO image_likes (image_id, ip_address) VALUES (?, ?)', id, clientIp);
+    dbRun('UPDATE images SET likes = likes + 1 WHERE id = ?', id);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: '操作失败' });
+  }
 });
 
 // POST /api/images/:id/bookmark
 router.post('/:id/bookmark', requireAuth, (req, res) => {
   const id = parseInt(req.params.id);
+  const image = dbGet("SELECT id, status FROM images WHERE id = ? AND status = 'approved'", id);
+  if (!image) return res.status(404).json({ error: '图片不存在' });
   dbRun('INSERT OR IGNORE INTO bookmarks (user_id, image_id) VALUES (?, ?)', req.user.id, id);
   res.json({ bookmarked: true });
 });
@@ -271,6 +295,15 @@ router.post('/', requireAuth, upload.single('file'), async (req, res, next) => {
     let status = 'pending';
     if (['admin', 'trusted'].includes(user.role)) status = 'approved';
     else if (getConfig('upload_require_review') === false) status = 'approved';
+
+    // 用户上传配额检查（admin/trusted 跳过）
+    if (!['admin', 'trusted'].includes(user.role)) {
+      const userImageCount = dbGet('SELECT COUNT(*) as c FROM images WHERE user_id = ?', user.id).c;
+      const maxUploads = getConfig('max_uploads_per_user') || 100;
+      if (userImageCount >= maxUploads) {
+        return res.status(429).json({ error: `上传数量已达上限 (${maxUploads})` });
+      }
+    }
 
     let imageId, autoExtracted = null, compressed = false;
 
@@ -374,9 +407,16 @@ router.delete('/:id', requireAuth, (req, res) => {
     deleteFile(image.thumbnail_path);
   }
 
-  dbRun('DELETE FROM image_tags WHERE image_id = ?', id);
+  // 获取受影响的 tag id
+  const affectedTagIds = dbAll('SELECT tag_id FROM image_tags WHERE image_id = ?', id).map(r => r.tag_id);
+
+  // 信任级联删除（images 删除时 image_tags, bookmarks, image_likes 级联清理）
   dbRun('DELETE FROM images WHERE id = ?', id);
-  dbRun('UPDATE tags SET use_count = (SELECT COUNT(*) FROM image_tags WHERE tag_id = tags.id)');
+
+  // 局部更新受影响 tag 的 use_count
+  for (const tid of affectedTagIds) {
+    dbRun('UPDATE tags SET use_count = (SELECT COUNT(*) FROM image_tags WHERE tag_id = ?) WHERE id = ?', tid, tid);
+  }
   res.json({ ok: true });
 });
 
